@@ -1,0 +1,22 @@
+{
+    "name": "ec-virtual-assistant-web",
+    "version": "0.1.0",
+    "license": "UNLICENSED",
+    "scripts": {
+        "ng": "ng",
+        "start": "ng serve",
+        "build": "ng build --configuration production-optimized",
+        "lint": "ng lint"
+    },
+    "private": true,
+    "dependencies": {
+        "@eui/deps-base": "21.4.4"
+    },
+    "devDependencies": {},
+    "resolutions": {
+        "semver": ">=7.5.2",
+        "dompurify": ">=3.2.4",
+        "tmp": ">0.2.4",
+        "tablesort": "5.6.0"
+    }
+}

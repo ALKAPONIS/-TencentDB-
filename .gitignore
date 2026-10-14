@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.pytest_tool_results/
+node_modules/
+dist/
+.angular/
+.env
+*.local

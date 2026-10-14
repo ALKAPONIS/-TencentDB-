@@ -1,0 +1,6 @@
+/* Global styles. eUI provides the EC look and feel; keep overrides minimal. */
+.app-footer {
+    padding: var(--eui-s-s, 0.5rem) var(--eui-s-m, 1rem);
+    font: var(--eui-f-xs);
+    color: var(--eui-c-neutral-light, #666);
+}

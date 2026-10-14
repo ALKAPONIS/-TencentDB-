@@ -1,0 +1,72 @@
+# TencentDB Agent Memory - gateway configuration for the EC Virtual Assistant PoC.
+# Based on MemoryCore/tdai-gateway.standalone.yaml (v2.0.2). Environment variables override this file:
+#   TDAI_GATEWAY_API_KEY  bearer token required on every call except /health   (secret)
+#   TDAI_GATEWAY_HOST     "::" on Railway so the private IPv6 network can reach it
+#   TDAI_LLM_BASE_URL     the agent's LLM shim, http://agent.railway.internal:8000/llm-shim/v1
+#   TDAI_LLM_API_KEY      the shim token (= the agent's LLM_SHIM_TOKEN)              (secret)
+#   TDAI_LLM_MODEL        any label; the shim chooses the AI@EC model
+#   TDAI_DATA_DIR         /data/tdai-memory (the Railway volume)
+
+deployMode: standalone
+stateBackend: "local"
+
+server:
+  port: 8420
+  host: "0.0.0.0"
+
+data:
+  baseDir: "/data/tdai-memory"
+
+llm:
+  baseUrl: "${TDAI_LLM_BASE_URL}"
+  apiKey: "${TDAI_LLM_API_KEY}"
+  model: "aiec-via-shim"
+  # Mistral on the AI@EC Platform takes max_tokens; keep it modest.
+  maxTokens: 4096
+  timeoutMs: 120000
+
+memory:
+  # chat = personal assistant memories (persona / episodic / instruction).
+  # The Tencent start-up scripts default to "code", which extracts little from non-coding dialogue.
+  promptMode: chat
+
+  capture:
+    enabled: true
+
+  extraction:
+    enabled: true
+    enableDedup: true
+    maxMemoriesPerSession: 20
+
+  persona:
+    # Lower than the default (50) so the L3 profile appears during a short demo.
+    triggerEveryN: 10
+    maxScenes: 15
+    triggerMode: current
+
+  pipeline:
+    # Demo-friendly timings: distil after every conversation and after 1 minute of idle time
+    # (defaults: every 5 conversations, 10 minutes idle). More LLM calls, faster visible memory.
+    everyNConversations: 1
+    enableWarmup: true
+    l1IdleTimeoutSeconds: 60
+    l2DelayAfterL1Seconds: 30
+    l2MinIntervalSeconds: 120
+    l2MaxIntervalSeconds: 900
+
+  recall:
+    enabled: true
+    maxResults: 5
+    scoreThreshold: 0.3
+    strategy: "hybrid"
+    timeoutMs: 5000
+
+  storeBackend: "sqlite"
+
+  # No embedding endpoint in the PoC: recall is BM25 keyword search (needs SQLite FTS5).
+  embedding:
+    provider: "none"
+
+  bm25:
+    enabled: true
+    language: "en"

@@ -1,0 +1,268 @@
+<eui-page>
+    <eui-page-header
+        label="Ask about European Commission announcements"
+        subLabel="Answers come from Commission press releases and speeches. The assistant remembers your preferences across conversations." />
+
+    <eui-page-content>
+        <div class="va-layout">
+            <!-- ============================== Conversation ============================== -->
+            <section class="va-chat" aria-label="Conversation with the assistant">
+                <div class="va-chat__status">
+                    @if (!healthChecked()) {
+                        <eui-badge euiSecondary>Checking services…</eui-badge>
+                    } @else if (!health()) {
+                        <eui-badge euiDanger>Assistant service unreachable</eui-badge>
+                    } @else {
+                        @if (memoryReady()) {
+                            <eui-badge euiSuccess>Long-term memory on</eui-badge>
+                        } @else {
+                            <eui-badge euiWarning [attr.title]="health()?.memory?.error">Long-term memory unavailable</eui-badge>
+                        }
+                        <eui-badge euiSecondary>{{ health()?.knowledge_documents }} documents</eui-badge>
+                        <eui-badge euiSecondary>{{ health()?.assistant_model }} · AI&#64;EC</eui-badge>
+                    }
+                    <span class="va-spacer"></span>
+                    <button euiButton euiSecondary euiSizeS (click)="newConversation()" [euiDisabled]="busy()">
+                        <eui-icon-svg icon="plus:regular" size="s" />New conversation
+                    </button>
+                </div>
+
+                @if (notice()) {
+                    <div euiAlert euiInfo class="va-notice">{{ notice() }}</div>
+                }
+
+                <div class="va-thread" #thread aria-live="polite">
+                    @if (messages().length === 0) {
+                        <div class="va-empty">
+                            <eui-icon-svg icon="chat-circle-text:regular" size="2xl" fillColor="branding" />
+                            <p class="va-empty__title">How can I help?</p>
+                            <p class="va-empty__text">
+                                Try the demo story: state a preference, ask a question, then start a new conversation and see
+                                the assistant apply what it learned.
+                            </p>
+                            <div class="va-suggestions">
+                                @for (s of suggestions; track s) {
+                                    <button euiButton euiSecondary euiOutline euiSizeS euiLineWrap (click)="useSuggestion(s)">{{ s }}</button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @for (m of messages(); track $index) {
+                        <article class="va-msg" [class.va-msg--user]="m.role === 'user'" [class.va-msg--assistant]="m.role === 'assistant'">
+                            <div class="va-msg__who">
+                                @if (m.role === 'user') {
+                                    <eui-icon-svg icon="user:regular" size="s" /> You
+                                } @else {
+                                    <eui-icon-svg icon="robot:regular" size="s" /> Assistant
+                                }
+                            </div>
+                            <div class="va-msg__bubble">
+                                @if (m.role === 'user') {
+                                    <p class="va-msg__text">{{ m.content }}</p>
+                                } @else {
+                                    @if (m.streaming && !m.content) {
+                                        <eui-progress-bar [isIndeterminate]="true" euiSizeXS label="Thinking" />
+                                    }
+                                    <div class="va-msg__answer" [innerHTML]="m.html"></div>
+                                    @if (m.error) {
+                                        <div euiAlert euiDanger class="va-msg__error">{{ m.error }}</div>
+                                    }
+                                    @if (m.trace; as t) {
+                                        <div class="va-msg__meta">
+                                            @if (t.memory?.atoms?.length || t.memory?.persona_used) {
+                                                <eui-chip euiSizeS euiInfo>
+                                                    <eui-icon-svg icon="brain:regular" size="xs" />
+                                                    {{ t.memory?.atoms?.length || 0 }} {{ (t.memory?.atoms?.length || 0) === 1 ? "memory" : "memories" }} used
+                                                </eui-chip>
+                                            }
+                                            @for (src of t.sources ?? []; track src.reference) {
+                                                <a class="va-source" [href]="src.url" target="_blank" rel="noopener">
+                                                    <eui-icon-svg icon="newspaper:regular" size="xs" />{{ src.reference }}
+                                                </a>
+                                            }
+                                            @if (t.memory_write === 'written') {
+                                                <eui-chip euiSizeS euiSuccess>Saved to memory</eui-chip>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+
+                <form class="va-input" (submit)="$event.preventDefault(); send()">
+                    <label class="va-sr-only" for="va-question">Your question</label>
+                    <textarea
+                        id="va-question"
+                        euiTextArea
+                        rows="2"
+                        [ngModel]="draft()"
+                        (ngModelChange)="draft.set($event)"
+                        name="question"
+                        (keydown)="onKeydown($event)"
+                        placeholder="Ask about a Commission announcement, or tell me how you like your answers…"
+                        [disabled]="busy()"></textarea>
+                    @if (busy()) {
+                        <button euiButton euiSecondary type="button" (click)="stop()">Stop</button>
+                    } @else {
+                        <button euiButton euiPrimary type="submit" [euiDisabled]="!draft().trim()">
+                            <eui-icon-svg icon="paper-plane-right:regular" size="s" />Send
+                        </button>
+                    }
+                </form>
+                <p class="va-hint">Enter to send, Shift+Enter for a new line. Your pseudonymous id: <code>{{ userId }}</code></p>
+            </section>
+
+            <!-- ============================== Side panel ============================== -->
+            <aside class="va-side" aria-label="Memory and sources">
+                <eui-card>
+                    <eui-card-header>
+                        <eui-card-header-title>Memory used in the last answer</eui-card-header-title>
+                    </eui-card-header>
+                    <eui-card-content>
+                        @if (!lastTrace()) {
+                            <p class="va-muted">Nothing yet. After each answer you will see here which memories were used.</p>
+                        } @else {
+                            @if (lastTrace()?.memory?.persona_used) {
+                                <p class="va-small"><eui-icon-svg icon="user-circle:regular" size="xs" /> Your profile (L3) was applied.</p>
+                            }
+                            @if (usedAtoms().length) {
+                                <ul class="va-list">
+                                    @for (a of usedAtoms(); track a.id) {
+                                        <li>
+                                            <eui-chip euiSizeS euiSecondary>{{ a.type || 'note' }}</eui-chip>
+                                            <span>{{ a.content }}</span>
+                                        </li>
+                                    }
+                                </ul>
+                            } @else if (!lastTrace()?.memory?.persona_used) {
+                                <p class="va-muted">No stored memory was relevant to this question.</p>
+                            }
+                            @if (lastTrace()?.memory_deleted?.length) {
+                                <p class="va-small">Deleted on request: {{ lastTrace()?.memory_deleted?.length }} item(s).</p>
+                            }
+                            <p class="va-small va-muted">Write to memory: {{ lastTrace()?.memory_write || 'n/a' }}</p>
+                        }
+                    </eui-card-content>
+                </eui-card>
+
+                <eui-card>
+                    <eui-card-header>
+                        <eui-card-header-title>Sources</eui-card-header-title>
+                    </eui-card-header>
+                    <eui-card-content>
+                        @if (lastTrace()?.sources?.length) {
+                            <ul class="va-list">
+                                @for (s of lastTrace()?.sources ?? []; track s.reference) {
+                                    <li>
+                                        <a [href]="s.url" target="_blank" rel="noopener" class="eui-u-text-link-external">{{ s.title }}</a>
+                                        <span class="va-small va-muted">{{ s.type }} · {{ s.reference }} · {{ s.date }}</span>
+                                    </li>
+                                }
+                            </ul>
+                        } @else {
+                            <p class="va-muted">The press releases quoted in the last answer appear here.</p>
+                        }
+                    </eui-card-content>
+                </eui-card>
+
+                <eui-card>
+                    <eui-card-header>
+                        <eui-card-header-title>What I remember about you</eui-card-header-title>
+                        <eui-card-header-right-content>
+                            <eui-icon-button icon="arrow-clockwise:regular" ariaLabel="Refresh memory" (buttonClick)="refreshMemory()" />
+                        </eui-card-header-right-content>
+                    </eui-card-header>
+                    <eui-card-content>
+                        @if (!memoryReady()) {
+                            <p class="va-muted">Long-term memory is not connected.</p>
+                        } @else {
+                            @if (memoryLoading()) {
+                                <eui-progress-bar [isIndeterminate]="true" euiSizeXS />
+                            }
+                            @if (memory(); as mem) {
+                                @if (mem.persona && mem.persona !== '(cleared by user)') {
+                                    <p class="va-small"><strong>Profile (L3)</strong></p>
+                                    <p class="va-persona">{{ mem.persona }}</p>
+                                }
+                                @if (mem.atoms.length) {
+                                    <p class="va-small"><strong>Memories (L1)</strong></p>
+                                    <ul class="va-list">
+                                        @for (a of mem.atoms; track a.id) {
+                                            <li class="va-atom">
+                                                <eui-chip euiSizeS euiSecondary>{{ a.type || 'note' }}</eui-chip>
+                                                <span class="va-atom__text">{{ a.content }}</span>
+                                                <eui-icon-button icon="trash:regular" size="s" ariaLabel="Forget this memory" (buttonClick)="deleteAtom(a.id)" />
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                @if (mem.scenarios.length) {
+                                    <p class="va-small"><strong>Topics (L2)</strong></p>
+                                    <ul class="va-list">
+                                        @for (s of mem.scenarios; track s.path) {
+                                            <li><span>{{ s.summary || s.path }}</span></li>
+                                        }
+                                    </ul>
+                                }
+                                @if (!mem.atoms.length && !mem.scenarios.length && (!mem.persona || mem.persona === '(cleared by user)')) {
+                                    <p class="va-muted">Nothing distilled yet.</p>
+                                }
+                                <p class="va-small va-muted">
+                                    {{ mem.conversation_messages }} raw messages stored (L0). New memories are distilled in the
+                                    background, usually within a few minutes.
+                                </p>
+                                <button euiButton euiDanger euiOutline euiSizeS (click)="forgetEverything()">
+                                    <eui-icon-svg icon="trash:regular" size="s" />Forget everything
+                                </button>
+                            }
+                        }
+                    </eui-card-content>
+                </eui-card>
+
+                <eui-card [euiCollapsible]="true" [euiCollapsed]="true">
+                    <eui-card-header [hasHeaderClickToggle]="true">
+                        <eui-card-header-title>Technical details</eui-card-header-title>
+                    </eui-card-header>
+                    <eui-card-content>
+                        @if (lastTrace(); as t) {
+                            <dl class="va-dl">
+                                <dt>Model</dt><dd>{{ t.model }}</dd>
+                                <dt>Agent steps</dt><dd>{{ t.step_count ?? 'n/a' }}</dd>
+                                <dt>Tools</dt><dd>{{ toolSummary(t) }}</dd>
+                                <dt>Tokens</dt><dd>{{ tokenTotal(t) ?? 'n/a' }}</dd>
+                                <dt>Exit reason</dt><dd>{{ t.exit_reason || 'n/a' }}</dd>
+                                <dt>Duration</dt><dd>{{ t.duration_s ?? 'n/a' }} s</dd>
+                            </dl>
+                        } @else {
+                            <p class="va-muted">Agent introspection (Haystack 3 State) for the last answer.</p>
+                        }
+                        <button euiButton euiSecondary euiSizeS (click)="loadQuota()">Show AI&#64;EC quota</button>
+                        @if (quota(); as q) {
+                            <ul class="va-list">
+                                @for (row of q; track row.model) {
+                                    <li>
+                                        <code>{{ row.model }}</code>
+                                        @if (row.error) {
+                                            <span class="va-small va-muted">{{ row.error }}</span>
+                                        } @else {
+                                            <span class="va-small">{{ row.consumed_total_tokens }} / {{ row.quota }} tokens</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        @if (health(); as h) {
+                            <p class="va-small va-muted">
+                                Memory team {{ h.memory.team_id || 'n/a' }}, agent {{ h.memory.agent_id || 'n/a' }},
+                                BM25/FTS5 {{ h.memory.fts_available === false ? 'unavailable' : 'available' }}.
+                            </p>
+                        }
+                    </eui-card-content>
+                </eui-card>
+            </aside>
+        </div>
+    </eui-page-content>
+</eui-page>

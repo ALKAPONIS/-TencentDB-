@@ -1,0 +1,7 @@
+{
+    "modules": {
+        "core": {
+            "base": "/api"
+        }
+    }
+}

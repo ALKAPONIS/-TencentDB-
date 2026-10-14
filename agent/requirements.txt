@@ -1,0 +1,7 @@
+haystack-ai==3.3.0
+hayhooks==2.1.0
+uvicorn==0.54.0
+httpx==0.28.1
+pypdf==6.20.1
+# TencentDB Agent Memory Python SDK (not published on PyPI): pinned to the v2.0.2 release tag
+tencentdb-agent-memory-sdk-python-v2 @ git+https://github.com/TencentCloud/TencentDB-Agent-Memory.git@v2.0.2#subdirectory=sdk/memory-core/python
